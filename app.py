@@ -7,13 +7,20 @@ st.title("💼 F.R.I.D.A.Y. Business Intelligence Core")
 st.write("Compare localized venture variables against global industry baselines.")
 
 # 2. Setup API Key (Use the same Gemini API key from your J.A.R.V.I.S. commands.py file)
-if "GEMINI_API_KEY" in st.secrets:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-else:
-    API_KEY = "YOUR_LOCAL_FALLBACK_KEY" # For when you run it offline
+# Force-load the key from your secrets vault
+api_key = st.secrets["GEMINI_API_KEY"]
 
-genai.configure(api_key=API_KEY)
+# Explicitly configure the client without auto-detecting credentials
+genai.configure(api_key=api_key)
 
+# Specify the model explicitly
+model = genai.GenerativeModel('gemini-1.5-flash') 
+# (Note: Use 'gemini-1.5-flash' for stability—'2.0-flash' is still in preview/experimental and causes these auth glitches)
+
+def generate_response(prompt):
+    response = model.generate_content(prompt)
+    return response.text
+    
 # 3. Industry Baseline Profiles (The Control Data)
 INDUSTRIES = {
     "Retail Boutique": {"margin": 15.0, "cac": 40.0, "risk": "High physical rent overhead"},
