@@ -7,7 +7,11 @@ st.title("💼 F.R.I.D.A.Y. Business Intelligence Core")
 st.write("Compare localized venture variables against global industry baselines.")
 
 # 2. Setup API Key (Use the same Gemini API key from your J.A.R.V.I.S. commands.py file)
-API_KEY = "AQ.Ab8RN6IwPiqv5ksn8dLqrJ9KPMzzv2dW3nGG8sKv2CG1C0WBZA" 
+if "GEMINI_API_KEY" in st.secrets:
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+else:
+    API_KEY = "YOUR_LOCAL_FALLBACK_KEY" # For when you run it offline
+
 genai.configure(api_key=API_KEY)
 
 # 3. Industry Baseline Profiles (The Control Data)
