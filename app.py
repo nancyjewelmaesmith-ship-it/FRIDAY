@@ -23,7 +23,7 @@ genai.configure(api_key=api_key)
 # Bind strictly to the stable 1.5 engine to completely eliminate 429 quota errors
 try:
     model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
+        model_name='gemini-3.5-flash',
         system_instruction=(
             "You are F.R.I.D.A.Y., a highly sophisticated, crisp, responsive, and loyal autonomous AI matrix. "
             "Your personality is highly efficient, analytical, professional, and slightly sharp. "
@@ -93,7 +93,7 @@ if st.button("Generate Inverse Intelligence Projection"):
         
         with st.spinner("F.R.I.D.A.Y. Brain Layer working..."):
             try:
-                # FIXED: Calling the pre-configured global 1.5 model instead of trying to instantiate 2.0-flash here
+                # Use the pre-configured global model seamlessly
                 response = model.generate_content(
                     prompt,
                     generation_config={"temperature": 0.6}
