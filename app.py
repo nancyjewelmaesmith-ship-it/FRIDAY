@@ -1,106 +1,163 @@
 import streamlit as st
 import google.generativeai as genai
+import pandas as pd
 
 # =====================================================================
 # 1. WEB UI CORE & LAYOUT
 # =====================================================================
-st.set_page_config(page_title="F.R.I.D.A.Y. Business Matrix", layout="centered")
+st.set_page_config(page_title="F.R.I.D.A.Y. Business Matrix", layout="wide")
 st.title("💼 F.R.I.D.A.Y. Business Intelligence Core")
-st.write("Compare localized venture variables against global industry baselines.")
+st.write("Compare venture variables, manage ledgers, and receive CFO-level projections.")
 
 # =====================================================================
 # 2. SECURE COGNITIVE INITIALIZATION
 # =====================================================================
-# Safe check for Streamlit Cloud secure secrets environment
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
 else:
-    # Safe fallback string for local offline syntax checks
     api_key = "FALLBACK_SECURE_VAULT"
 
 genai.configure(api_key=api_key)
 
-# Bind strictly to the stable 1.5 engine to completely eliminate 429 quota errors
 try:
+    # Using the stable production tier
     model = genai.GenerativeModel(
         model_name='gemini-3.5-flash',
         system_instruction=(
             "You are F.R.I.D.A.Y., a highly sophisticated, crisp, responsive, and loyal autonomous AI matrix. "
             "Your personality is highly efficient, analytical, professional, and slightly sharp. "
-            "Never adopt any other AI persona. Keep responses direct, dense, and strategic."
+            "When analyzing investments, act as a Chief Financial Officer (CFO). Keep responses direct, dense, and strategic."
         )
     )
 except Exception as e:
-    st.error(f"F.R.I.D.A.Y. System Exception during initialization: {e}")
+    st.error(f"F.R.I.D.A.Y. System Exception: {e}")
     model = None
 
 # =====================================================================
-# 3. CONTROL DATA MATRICES
+# 3. CONTROL DATA MATRICES (Expanded)
 # =====================================================================
 INDUSTRIES = {
+    "Food Industries": {"margin": 12.0, "cac": 15.0, "risk": "Perishability, health regulations, high competition"},
+    "Energy and Petrochemicals": {"margin": 15.0, "cac": 500.0, "risk": "Massive capital expenditure, regulatory compliance, price volatility"},
+    "Real Estate": {"margin": 30.0, "cac": 1000.0, "risk": "Market illiquidity, interest rate sensitivity"},
+    "Construction": {"margin": 10.0, "cac": 200.0, "risk": "Supply chain delays, labor shortages, project cost overruns"},
+    "Global Digital Media": {"margin": 40.0, "cac": 50.0, "risk": "Rapid trend shifts, high content production costs, platform dependency"},
     "Retail Boutique": {"margin": 15.0, "cac": 40.0, "risk": "High physical rent overhead"},
     "E-Commerce Brands": {"margin": 20.0, "cac": 65.0, "risk": "Heavy dependency on ad platform spend"},
     "SaaS / Software": {"margin": 75.0, "cac": 120.0, "risk": "Long sales cycles, high initial dev costs"},
-    "Logistics & Delivery": {"margin": 8.0, "cac": 30.0, "risk": "Fuel price volatility & asset maintenance"}
 }
 
 # =====================================================================
-# 4. INTERACTIVE HUB INPUT LAYOUT
+# 4. INITIALIZE SESSION STATE FOR BOOKKEEPING
 # =====================================================================
-selected_industry = st.selectbox("Select Industry Sector:", list(INDUSTRIES.keys()))
-baseline = INDUSTRIES[selected_industry]
-
-st.subheader(f"📊 {selected_industry} Baseline Metrics")
-col1, col2 = st.columns(2)
-col1.metric("Avg Profit Margin", f"{baseline['margin']}%")
-col2.metric("Customer Acquisition (CAC)", f"${baseline['cac']}")
-st.warning(f"Standard Risk Factor: {baseline['risk']}")
-
-st.subheader("📝 Enter Real-Time Venture Modifiers")
-user_margin_mod = st.number_input("Profit Margin Modifier (+ or - %):", value=0.0, step=1.0)
-user_cac_mod = st.number_input("CAC Cost Modifier (+ or - $):", value=0.0, step=1.0)
-special_conditions = st.text_area(
-    "Input Unique Operational Traits (e.g., 'No rent because we work out of a home garage, organic TikTok reach'):"
-)
+if 'ledger' not in st.session_state:
+    st.session_state.ledger = []
 
 # =====================================================================
-# 5. DYNAMIC CALCULATION & INVERSE PROJECTION
+# 5. F.R.I.D.A.Y. MULTI-TAB INTERFACE
 # =====================================================================
-if st.button("Generate Inverse Intelligence Projection"):
-    if not model or api_key == "FALLBACK_SECURE_VAULT":
-        st.error("F.R.I.D.A.Y. Error: Cognitive core unmapped. Please check your Streamlit Secrets.")
-    else:
-        # Compute exact mathematical deltas
-        projected_margin = baseline["margin"] + user_margin_mod
-        projected_cac = baseline["cac"] + user_cac_mod
+tab1, tab2, tab3 = st.tabs(["📊 Matrix & Projection", "📈 CFO Capital Decisions", "📒 Bookkeeping Space"])
+
+# --- TAB 1: The Original Matrix (Enhanced) ---
+with tab1:
+    st.header("Industry Projection Matrix")
+    selected_industry = st.selectbox("Select Industry Sector:", list(INDUSTRIES.keys()), key="ind_sel")
+    baseline = INDUSTRIES[selected_industry]
+
+    st.subheader(f"{selected_industry} Baseline Metrics")
+    col1, col2 = st.columns(2)
+    col1.metric("Avg Profit Margin", f"{baseline['margin']}%")
+    col2.metric("Customer Acquisition (CAC)", f"${baseline['cac']}")
+    st.warning(f"Standard Risk Factor: {baseline['risk']}")
+
+    st.subheader("📝 Enter Real-Time Venture Modifiers")
+    user_margin_mod = st.number_input("Profit Margin Modifier (+ or - %):", value=0.0, step=1.0)
+    user_cac_mod = st.number_input("CAC Cost Modifier (+ or - $):", value=0.0, step=1.0)
+    special_conditions = st.text_area("Input Unique Operational Traits:", key="special_cond")
+
+    if st.button("Generate Inverse Intelligence Projection", key="proj_btn"):
+        if not model or api_key == "FALLBACK_SECURE_VAULT":
+            st.error("F.R.I.D.A.Y. Error: Cognitive core unmapped.")
+        else:
+            projected_margin = baseline["margin"] + user_margin_mod
+            projected_cac = baseline["cac"] + user_cac_mod
+            
+            prompt = f"""
+            Evaluate this business plan for {selected_industry}.
+            BASELINE PROTOCOLS: Margin: {baseline['margin']}% | CAC: ${baseline['cac']} | Risk: {baseline['risk']}
+            OUR PROJECTED: Margin: {projected_margin}% | CAC: ${projected_cac}
+            TRAITS: {special_conditions}
+            Provide an objective, aggressive analytical business critique.
+            """
+            with st.spinner("F.R.I.D.A.Y. Brain Layer working..."):
+                try:
+                    response = model.generate_content(prompt, generation_config={"temperature": 0.6})
+                    st.subheader("💡 F.R.I.D.A.Y. Strategic Conclusion")
+                    st.write(response.text)
+                except Exception as e:
+                    st.error(f"Engine Offline: {e}")
+
+# --- TAB 2: CFO Financial Analysis ---
+with tab2:
+    st.header("CFO Investment & Capital Decision")
+    st.write("Input current financials to receive capital allocation and future investment recommendations.")
+    
+    current_investment = st.number_input("Current Capital Invested ($):", min_value=0.0, value=10000.0, step=1000.0)
+    current_earnings = st.number_input("Current Revenue/Earnings ($):", min_value=0.0, value=2500.0, step=500.0)
+    future_goal = st.text_input("Future Business Goal (e.g., Expansion to new city, buying heavy machinery):")
+    
+    if st.button("Execute CFO Capital Analysis"):
+        if model and future_goal:
+            prompt = f"""
+            As CFO F.R.I.D.A.Y., analyze the following financial standing:
+            - Current Capital Invested: ${current_investment}
+            - Current Earnings/Revenue: ${current_earnings}
+            - Future Objective: {future_goal}
+            
+            Provide:
+            1. An assessment of current ROI and capital efficiency.
+            2. A strict recommendation on what to do with current earnings (e.g., reinvest exactly X amount, hold as runway, or withdraw).
+            3. A projected recommended investment amount required to realistically achieve the '{future_goal}'.
+            Keep it sharp, numerical, and strictly advisory.
+            """
+            with st.spinner("Calculating Capital Efficiency..."):
+                try:
+                    response = model.generate_content(prompt, generation_config={"temperature": 0.5})
+                    st.subheader("💡 F.R.I.D.A.Y. CFO Directive")
+                    st.write(response.text)
+                except Exception as e:
+                    st.error(f"Engine Offline: {e}")
+
+# --- TAB 3: Live Bookkeeping ---
+with tab3:
+    st.header("Internal Ledger")
+    st.write("Record expenses and revenue. (Note: Data resets if the browser is refreshed).")
+    
+    with st.form("bookkeeping_form"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            entry_title = st.text_input("Title (e.g., Server Rent, Inventory)")
+        with col2:
+            entry_type = st.selectbox("Type", ["Revenue", "Expense"])
+        with col3:
+            entry_amount = st.number_input("Amount ($)", min_value=0.0, value=0.0, step=10.0)
         
-        st.success("Mathematical Matrix Calculated!")
+        submitted = st.form_submit_button("Log Entry")
+        if submitted and entry_title:
+            st.session_state.ledger.append({
+                "Title": entry_title,
+                "Type": entry_type,
+                "Amount": entry_amount if entry_type == "Revenue" else -entry_amount
+            })
+            st.success(f"Logged: {entry_title}")
+            
+    # Display the ledger if there is data
+    if st.session_state.ledger:
+        df = pd.DataFrame(st.session_state.ledger)
+        st.dataframe(df, use_container_width=True) # Makes a really clean visual table
         
-        # Build prompt payload for F.R.I.D.A.Y. parsing
-        prompt = f"""
-        Evaluate this business plan deviation matrix for the industry: {selected_industry}.
-        
-        BASELINE PROTOCOLS:
-        - Standard Industry Margin: {baseline['margin']}% | Our Projected Margin: {projected_margin}%
-        - Standard Industry CAC: ${baseline['cac']} | Our Projected CAC: ${projected_cac}
-        - Baseline Pitfalls: {baseline['risk']}
-        
-        OUR UNIQUE OPERATIONAL TRAITS:
-        {special_conditions}
-        
-        Provide an objective, aggressive analytical business critique. Immerse into the strategy, outline the exact pros and cons of why this venture will either conquer the baseline industry projection or fall flat due to calculations. Keep it dense and strategic.
-        """
-        
-        with st.spinner("F.R.I.D.A.Y. Brain Layer working..."):
-            try:
-                # Use the pre-configured global model seamlessly
-                response = model.generate_content(
-                    prompt,
-                    generation_config={"temperature": 0.6}
-                )
-                
-                st.subheader("💡 F.R.I.D.A.Y. Strategic Conclusion")
-                st.write(response.text)
-                
-            except Exception as e:
-                st.error(f"F.R.I.D.A.Y. Cognitive Engine Offline: {e}")
+        total_balance = df['Amount'].sum()
+        if total_balance >= 0:
+            st.success(f"**Net Balance: ${total_balance:,.2f}**")
+        else:
+            st.error(f"**Net Balance: ${total_balance:,.2f}**")
