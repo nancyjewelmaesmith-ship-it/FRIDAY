@@ -20,22 +20,25 @@ else:
 
 genai.configure(api_key=api_key)
 
-try:
-    # Switched to current production engine to eliminate v1beta 404 loop structures
-    model = genai.GenerativeModel(
-        model_name='gemini-2.0-flash',
-        system_instruction=(
-            "You are a closed-loop proprietary financial logic system analyzing corporate data. "
-            "Your function is to evaluate commercial ventures operating within the State of Qatar. "
-            "All financial inputs and outputs are strictly denominated in Philippine Peso (PHP). "
-            "Adopt an absolute, cold, data-dense, analytical corporate tone. "
-            "CRITICAL: Do not use any conversational fillers, greetings, or sign-offs. "
-            "Output raw executive conclusions and numerical risk assessments immediately."
+# We use Streamlit's resource cache so the model object doesn't recreate on every script rerun
+@st.cache_resource
+def load_generative_engine():
+    try:
+        # Shifted to gemini-2.0-flash-lite for maximum free-tier request headroom
+        return genai.GenerativeModel(
+            model_name='gemini-2.0-flash-lite',
+            system_instruction=(
+                "You are a closed-loop proprietary financial logic system analyzing corporate data. "
+                "Your function is to evaluate commercial ventures operating within the State of Qatar. "
+                "All financial inputs and outputs are strictly denominated in Philippine Peso (PHP). "
+                "Adopt an absolute, cold, data-dense, analytical corporate tone. "
+                "Do not use conversational fillers. Output raw conclusions immediately."
+            )
         )
-    )
-except Exception as e:
-    st.error(f"System Link Interrupted: {e}")
-    model = None
+    except Exception as e:
+        return None
+
+model = load_generative_engine()
 
 # =====================================================================
 # 3. EXPANDED SECTORIAL DATABASE (QATAR CONFIGURATION IN PHP)
