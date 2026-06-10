@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import pandas as pd
+import os
 
 # =====================================================================
 # 1. WEB UI CORE & LAYOUT
@@ -20,7 +21,6 @@ else:
 genai.configure(api_key=api_key)
 
 try:
-    # Using the stable production tier
     model = genai.GenerativeModel(
         model_name='gemini-3.5-flash',
         system_instruction=(
@@ -34,7 +34,7 @@ except Exception as e:
     model = None
 
 # =====================================================================
-# 3. CONTROL DATA MATRICES (Expanded)
+# 3. CONTROL DATA MATRICES
 # =====================================================================
 INDUSTRIES = {
     "Food Industries": {"margin": 12.0, "cac": 15.0, "risk": "Perishability, health regulations, high competition"},
@@ -48,17 +48,38 @@ INDUSTRIES = {
 }
 
 # =====================================================================
-# 4. INITIALIZE SESSION STATE FOR BOOKKEEPING
+# 4. PERSISTENT STORAGE MANAGEMENT (CSV ENGINE)
 # =====================================================================
+LEDGER_FILE = "ledger.csv"
+
+def load_ledger_from_disk():
+    """Reads saved data back into memory if the container restarts or refreshes."""
+    if os.path.exists(LEDGER_FILE):
+        try:
+            df = pd.read_csv(LEDGER_FILE)
+            return df.to_dict(orient="records")
+        except Exception:
+            return []
+    return []
+
+def save_ledger_to_disk(data):
+    """Permanently commits the memory matrix to the local container storage."""
+    try:
+        df = pd.DataFrame(data)
+        df.to_csv(LEDGER_FILE, index=False)
+    except Exception as e:
+        st.error(f"F.R.I.D.A.Y. Hardware Exception writing ledger data: {e}")
+
+# Initialize local system state using historical disk data
 if 'ledger' not in st.session_state:
-    st.session_state.ledger = []
+    st.session_state.ledger = load_ledger_from_disk()
 
 # =====================================================================
 # 5. F.R.I.D.A.Y. MULTI-TAB INTERFACE
 # =====================================================================
 tab1, tab2, tab3 = st.tabs(["📊 Matrix & Projection", "📈 CFO Capital Decisions", "📒 Bookkeeping Space"])
 
-# --- TAB 1: The Original Matrix (Enhanced) ---
+# --- TAB 1: Industry Projection Matrix ---
 with tab1:
     st.header("Industry Projection Matrix")
     selected_industry = st.selectbox("Select Industry Sector:", list(INDUSTRIES.keys()), key="ind_sel")
@@ -128,36 +149,84 @@ with tab2:
                 except Exception as e:
                     st.error(f"Engine Offline: {e}")
 
-# --- TAB 3: Live Bookkeeping ---
+# --- TAB 3: Live Bookkeeping Space ---
 with tab3:
-    st.header("Internal Ledger")
-    st.write("Record expenses and revenue. (Note: Data resets if the browser is refreshed).")
+    st.header("Internal Persistent Ledger")
+    st.write("Record expenses and revenue. Data persists through web refreshes.")
     
-    with st.form("bookkeeping_form"):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            entry_title = st.text_input("Title (e.g., Server Rent, Inventory)")
-        with col2:
-            entry_type = st.selectbox("Type", ["Revenue", "Expense"])
-        with col3:
-            entry_amount = st.number_input("Amount ($)", min_value=0.0, value=0.0, step=10.0)
+    # SYSTEM CONTROLS: Hard Backup Utility Zone
+    col_back1, col_back2 = st.columns(2)
+    with col_back1:
+        uploaded_file = st.file_uploader("📥 Import/Restore Ledger File (.csv)", type=["csv"])
+        if uploaded_file is not None:
+            try:
+                uploaded_df = pd.read_csv(uploaded_file)
+                if all(col in uploaded_df.columns for col in ["Title", "Type", "Amount"]):
+                    st.session_state.ledger = uploaded_df.to_dict(orient="records")
+                    save_ledger_to_disk(st.session_state.ledger)
+                    st.success("Ledger database successfully synchronized from backup file.")
+                else:
+                    st.error("Structure Error: Uploaded file missing mandatory ledger tracking headers.")
+            except Exception as e:
+                st.error(f"System failure processing structural load: {e}")
+                
+    with col_back2:
+        st.write("📤 Export System Security Backup")
+        if st.session_state.ledger:
+            df_export = pd.DataFrame(st.session_state.ledger)
+            csv_binary = df_export.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="💾 Download Data Backup (.csv)",
+                data=csv_binary,
+                file_name="friday_ledger_matrix.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("System ledger contains 0 active matrices to backup.")
+
+    st.markdown("---")
+
+    # Entry Submission Form
+    with st.form("bookkeeping_form", clear_on_submit=True):
+        col_t1, col_t2, col_t3 = st.columns(3)
+        with col_t1:
+            entry_title = st.text_input("Transaction Line Item Description (e.g., Office Rent, Client Payment)")
+        with col_t2:
+            entry_type = st.selectbox("Accounting Class", ["Revenue", "Expense"])
+        with col_t3:
+            entry_amount = st.number_input("Financial Float Value ($)", min_value=0.0, value=0.0, step=10.0)
         
-        submitted = st.form_submit_button("Log Entry")
+        submitted = st.form_submit_button("Commit Data Entry")
         if submitted and entry_title:
-            st.session_state.ledger.append({
+            new_record = {
                 "Title": entry_title,
                 "Type": entry_type,
                 "Amount": entry_amount if entry_type == "Revenue" else -entry_amount
-            })
-            st.success(f"Logged: {entry_title}")
+            }
+            st.session_state.ledger.append(new_record)
+            save_ledger_to_disk(st.session_state.ledger)
+            st.success(f"Committed record entry: {entry_title}")
+            st.rerun()
             
-    # Display the ledger if there is data
+    # Rendering Interface Layout
     if st.session_state.ledger:
-        df = pd.DataFrame(st.session_state.ledger)
-        st.dataframe(df, use_container_width=True) # Makes a really clean visual table
+        df_active = pd.DataFrame(st.session_state.ledger)
         
-        total_balance = df['Amount'].sum()
-        if total_balance >= 0:
-            st.success(f"**Net Balance: ${total_balance:,.2f}**")
+        # Human-readable absolute currency mapping
+        df_display = df_active.copy()
+        df_display['Amount'] = df_display['Amount'].map(lambda val: f"${abs(val):,.2f}")
+        
+        st.dataframe(df_display, use_container_width=True)
+        
+        net_balance = df_active['Amount'].sum()
+        if net_balance >= 0:
+            st.success(f"📈 **System Net Valuation Balance: ${net_balance:,.2f}**")
         else:
-            st.error(f"**Net Balance: ${total_balance:,.2f}**")
+            st.error(f"📉 **System Net Valuation Deficit: ${net_balance:,.2f}**")
+            
+        with st.expander("⚠️ System Clear Operations"):
+            if st.button("🔴 Purge Cloud Server History"):
+                st.session_state.ledger = []
+                save_ledger_to_disk([])
+                st.warning("Server instance data history deleted completely.")
+                st.rerun()
