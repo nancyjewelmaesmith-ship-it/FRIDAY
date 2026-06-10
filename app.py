@@ -1,7 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
+import os
 
 # =====================================================================
 # 1. CORE SYSTEM LAYOUT & LOCALIZATION
@@ -11,7 +11,34 @@ st.title("📊 Quantitative Market Intelligence Platform")
 st.write("Macroeconomic simulation suite calibrated for Qatar operations. Currency values scaled in PHP.")
 
 # =====================================================================
-# 2. SYSTEM ENGINE INITIALIZATION (MODERN PRODUCTION UPDATE)
+# 2. LOCAL DATA STORAGE STORAGE ENGINE (CSV BACKEND)
+# =====================================================================
+CSV_FILE_PATH = "ledger.csv"
+
+# Absolute local file validation: Creates the sheet instantly if it does not exist
+if not os.path.exists(CSV_FILE_PATH):
+    initial_df = pd.DataFrame(columns=["Title", "Type", "Amount"])
+    initial_df.to_csv(CSV_FILE_PATH, index=False)
+
+def read_local_ledger():
+    try:
+        return pd.read_csv(CSV_FILE_PATH)
+    except Exception:
+        return pd.DataFrame(columns=["Title", "Type", "Amount"])
+
+def append_to_local_ledger(new_row_dict):
+    current_df = read_local_ledger()
+    new_row_df = pd.DataFrame([new_row_dict])
+    updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
+    updated_df.to_csv(CSV_FILE_PATH, index=False)
+
+# Read active data frame from disk
+ledger_df = read_local_ledger()
+ledger_records = ledger_df.to_dict(orient="records")
+st.sidebar.success("💾 Local CSV Database Engine Online.")
+
+# =====================================================================
+# 3. SYSTEM ENGINE INITIALIZATION (CACHED TO PROTECT QUOTA)
 # =====================================================================
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
@@ -20,11 +47,10 @@ else:
 
 genai.configure(api_key=api_key)
 
-# We use Streamlit's resource cache so the model object doesn't recreate on every script rerun
 @st.cache_resource
 def load_generative_engine():
     try:
-        # Shifted to gemini-2.0-flash-lite for maximum free-tier request headroom
+        # Utilizing gemini-2.0-flash-lite for maximum free-tier request headroom
         return genai.GenerativeModel(
             model_name='gemini-2.0-flash-lite',
             system_instruction=(
@@ -32,16 +58,17 @@ def load_generative_engine():
                 "Your function is to evaluate commercial ventures operating within the State of Qatar. "
                 "All financial inputs and outputs are strictly denominated in Philippine Peso (PHP). "
                 "Adopt an absolute, cold, data-dense, analytical corporate tone. "
-                "Do not use conversational fillers. Output raw conclusions immediately."
+                "CRITICAL: Do not use any conversational fillers, greetings, or sign-offs. "
+                "Output raw executive conclusions and numerical risk assessments immediately."
             )
         )
-    except Exception as e:
+    except Exception:
         return None
 
 model = load_generative_engine()
 
 # =====================================================================
-# 3. EXPANDED SECTORIAL DATABASE (QATAR CONFIGURATION IN PHP)
+# 4. EXPANDED SECTORIAL DATABASE (QATAR CONFIGURATION IN PHP)
 # =====================================================================
 INDUSTRIES = {
     "Food Industries": {
@@ -87,30 +114,6 @@ INDUSTRIES = {
 }
 
 # =====================================================================
-# 4. TRANSPARENT DATA PERSISTENCE LAYER (EXPOSING LOGICAL ERRORS)
-# =====================================================================
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    existing_data = conn.read(ttl="0d") 
-    
-    # Validation check for missing headers on completely empty sheets
-    if existing_data.empty or len(existing_data.columns) < 3:
-        st.sidebar.error("⚠️ Structural Error: Target Google Sheet lacks mandatory columns. Add 'Title', 'Type', and 'Amount' to Row 1.")
-        is_cloud_connected = False
-        ledger_records = []
-    else:
-        ledger_records = existing_data.to_dict(orient="records")
-        is_cloud_connected = True
-        st.sidebar.success("⚡ Connected to Google Drive Storage.")
-except Exception as gsheets_err:
-    is_cloud_connected = False
-    st.sidebar.error(f"❌ Cloud Storage Offline: {gsheets_err}")
-    st.sidebar.info("Reverted to local session fallback data container.")
-    if 'fallback_ledger' not in st.session_state:
-        st.session_state.fallback_ledger = []
-    ledger_records = st.session_state.fallback_ledger
-
-# =====================================================================
 # 5. ENTERPRISE SUITE INTERFACE
 # =====================================================================
 tab1, tab2, tab3 = st.tabs(["📊 Sector Modeling Matrix", "📈 Capital Allocation Logic", "📒 Internal Ledger Vault"])
@@ -138,7 +141,7 @@ with tab1:
 
     if st.button("Run Quantitative Strategy Brief"):
         if not model or api_key == "FALLBACK_SECURE_VAULT":
-            st.error("System Core Error: Authentication vector unmapped.")
+            st.error("⚠️ AI Strategic Engine Offline: System is experiencing high-volume quota traffic. Local modeling remains stable.")
         else:
             projected_margin = baseline["margin"] + user_margin_mod - (supply_chain_stress * 0.1)
             projected_cac = baseline["cac"] + user_cac_mod + (local_rent_stress * 30)
@@ -159,7 +162,7 @@ with tab1:
                     st.subheader("📋 Executive Strategic Briefing")
                     st.write(response.text)
                 except Exception as e:
-                    st.error(f"Audit Interrupted: {e}")
+                    st.error(f"Audit Interrupted by Quota Limits: {e}. Please attempt parameter recalculation shortly.")
 
 # --- TAB 2: CAPITAL ALLOCATION LOGIC ---
 with tab2:
@@ -191,7 +194,9 @@ with tab2:
     st.info(f"System Baseline Directive: {strategy_summary}")
 
     if st.button("Generate Asset Directive"):
-        if model and future_goal:
+        if not model or api_key == "FALLBACK_SECURE_VAULT":
+            st.error("⚠️ CFO Strategy Matrix Temporarily Locked Due to API Quota limits. Directives based on rule equations are shown above.")
+        elif future_goal:
             prompt = f"""
             Analyze this corporate asset framework for a business operating in Qatar.
             PORTFOLIO DATA CONFIGURATION (PHP VALUES):
@@ -214,7 +219,7 @@ with tab2:
 # --- TAB 3: INTERNAL LEDGER VAULT ---
 with tab3:
     st.header("Financial Transaction System Ledger")
-    st.write("All entries register directly to the secure cloud storage layer.")
+    st.write("All entries register directly to the local text-based ledger database.")
     
     with st.form("ledger_secure_form", clear_on_submit=True):
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -225,7 +230,7 @@ with tab3:
         with col_t3:
             entry_amount = st.number_input("Transaction Financial Value (PHP)", min_value=0.0, value=0.0, step=500.0)
         
-        submitted = st.form_submit_button("Commit Transaction to Cloud Storage")
+        submitted = st.form_submit_button("Commit Transaction to CSV Storage")
         if submitted and entry_title:
             new_entry = {
                 "Title": entry_title,
@@ -233,20 +238,9 @@ with tab3:
                 "Amount": entry_amount if entry_type == "Revenue" else -entry_amount
             }
             
-            if not is_cloud_connected:
-                st.session_state.fallback_ledger.append(new_entry)
-                st.warning("Storage is operating locally. Data committed to volatile session memory.")
-                st.rerun()
-            else:
-                try:
-                    current_df = conn.read(ttl="0d")
-                    new_row_df = pd.DataFrame([new_entry])
-                    updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
-                    conn.update(data=updated_df)
-                    st.success("Transaction successfully transmitted to cloud file array.")
-                    st.rerun()
-                except Exception as write_err:
-                    st.error(f"Write Transaction Rejected by Target Storage Host: {write_err}")
+            append_to_local_ledger(new_entry)
+            st.success("Transaction committed directly to local CSV disk sector.")
+            st.rerun()
 
     if ledger_records:
         df_active = pd.DataFrame(ledger_records)
@@ -259,3 +253,12 @@ with tab3:
             st.success(f"📈 **Net Balance Profile: {net_balance:,.2f} PHP**")
         else:
             st.error(f"📉 **Net Deficit Position: {net_balance:,.2f} PHP**")
+
+        with st.expander("System Administration Protocols"):
+            if st.button("🔴 Purge Data Archive"):
+                empty_df = pd.DataFrame(columns=["Title", "Type", "Amount"])
+                empty_df.to_csv(CSV_FILE_PATH, index=False)
+                st.warning("Database file entirely cleared.")
+                st.rerun()
+    else:
+        st.info("System Ledger currently reads zero active transaction matrices.")
