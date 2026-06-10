@@ -2,20 +2,20 @@ import streamlit as st
 import google.generativeai as genai
 import pandas as pd
 import os
+import numpy as np
 
 # =====================================================================
 # 1. CORE SYSTEM LAYOUT & LOCALIZATION
 # =====================================================================
 st.set_page_config(page_title="Enterprise Analytics Core", layout="wide")
-st.title("📊 Quantitative Market Intelligence Platform")
+st.title("📊 Quantitative Market Intelligence Platform (Friday v2)")
 st.write("Macroeconomic simulation suite calibrated for Qatar operations. Currency values scaled in PHP.")
 
 # =====================================================================
-# 2. LOCAL DATA STORAGE STORAGE ENGINE (CSV BACKEND)
+# 2. LOCAL DATA STORAGE ENGINE (CSV BACKEND)
 # =====================================================================
 CSV_FILE_PATH = "ledger.csv"
 
-# Absolute local file validation: Creates the sheet instantly if it does not exist
 if not os.path.exists(CSV_FILE_PATH):
     initial_df = pd.DataFrame(columns=["Title", "Type", "Amount"])
     initial_df.to_csv(CSV_FILE_PATH, index=False)
@@ -32,10 +32,10 @@ def append_to_local_ledger(new_row_dict):
     updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
     updated_df.to_csv(CSV_FILE_PATH, index=False)
 
-# Read active data frame from disk
 ledger_df = read_local_ledger()
 ledger_records = ledger_df.to_dict(orient="records")
-st.sidebar.success("💾 Local CSV Database Engine Online.")
+net_balance_global = ledger_df['Amount'].sum() if not ledger_df.empty else 0.0
+st.sidebar.success(f"💾 Local Database Online. Vault Pool: {net_balance_global:,.2f} PHP")
 
 # =====================================================================
 # 3. SYSTEM ENGINE INITIALIZATION (CACHED TO PROTECT QUOTA)
@@ -50,7 +50,6 @@ genai.configure(api_key=api_key)
 @st.cache_resource
 def load_generative_engine():
     try:
-        # Utilizing gemini-2.0-flash-lite for maximum free-tier request headroom
         return genai.GenerativeModel(
             model_name='gemini-2.0-flash-lite',
             system_instruction=(
@@ -71,52 +70,25 @@ model = load_generative_engine()
 # 4. EXPANDED SECTORIAL DATABASE (QATAR CONFIGURATION IN PHP)
 # =====================================================================
 INDUSTRIES = {
-    "Food Industries": {
-        "margin": 8.0, 
-        "cac": 850.0, 
-        "risk": "High cold-chain utility overhead during desert peak summers, extreme reliance on food import logistics, strict compliance with the Ministry of Public Health."
-    },
-    "Energy and Petrochemicals": {
-        "margin": 18.0, 
-        "cac": 28000.0, 
-        "risk": "Heavy asset capital requirements, complex compliance with QatarEnergy distribution frameworks, high sensitivity to global LNG indexation changes."
-    },
-    "Real Estate & Property Management": {
-        "margin": 25.0, 
-        "cac": 55000.0, 
-        "risk": "Localized oversupply mechanics in specific Lusail and The Pearl residential zones, sensitivity to shifts in foreign ownership residency thresholds."
-    },
-    "Construction & Contracting": {
-        "margin": 6.0, 
-        "cac": 12000.0, 
-        "risk": "Raw material supply chain constraints, regulatory labor welfare framework costs, post-infrastructure pivot toward long-term maintenance contracts."
-    },
-    "Global Digital Media": {
-        "margin": 35.0, 
-        "cac": 1800.0, 
-        "risk": "Compliance with the Qatar Media City regulatory framework, high expenditure for localized bilingual content (Arabic/English), reliance on global ad platform data."
-    },
-    "Hospitality & Luxury Tourism": {
-        "margin": 15.0, 
-        "cac": 9500.0, 
-        "risk": "Significant seasonal demand drops during extreme summer heatwaves in Doha, high reliance on regional GCC tourism corridors and mega-events."
-    },
-    "Tech Consultancy & Cloud Services": {
-        "margin": 40.0, 
-        "cac": 4000.0, 
-        "risk": "High compensation costs for certified bilingual software engineers, mandatory compliance with National Cyber Security Agency (NCSA) frameworks."
-    },
-    "Logistics & Import-Export": {
-        "margin": 12.0, 
-        "cac": 15000.0, 
-        "risk": "Customs clearance timing variations at Hamad Port, high sensitivity to global marine freight price volatility affecting local distribution loops."
-    }
+    "Food Industries": {"margin": 8.0, "cac": 850.0, "risk": "High cold-chain utility overhead during desert peak summers, extreme reliance on food import logistics."},
+    "Energy and Petrochemicals": {"margin": 18.0, "cac": 28000.0, "risk": "Heavy asset capital requirements, complex compliance with QatarEnergy distribution frameworks."},
+    "Real Estate & Property Management": {"margin": 25.0, "cac": 55000.0, "risk": "Localized oversupply mechanics in specific Lusail and The Pearl residential zones."},
+    "Construction & Contracting": {"margin": 6.0, "cac": 12000.0, "risk": "Raw material supply chain constraints, regulatory labor welfare framework costs."},
+    "Global Digital Media": {"margin": 35.0, "cac": 1800.0, "risk": "Compliance with Qatar Media City regulatory framework, high expenditure for bilingual content."},
+    "Hospitality & Luxury Tourism": {"margin": 15.0, "cac": 9500.0, "risk": "Significant seasonal demand drops during extreme summer heatwaves in Doha."},
+    "Tech Consultancy & Cloud Services": {"margin": 40.0, "cac": 4000.0, "risk": "High compensation costs for software engineers, compliance with NCSA frameworks."},
+    "Logistics & Import-Export": {"margin": 12.0, "cac": 15000.0, "risk": "Customs clearance timing variations at Hamad Port, high freight volatility."}
 }
 
 # =====================================================================
 # 5. ENTERPRISE SUITE INTERFACE
 # =====================================================================
-tab1, tab2, tab3 = st.tabs(["📊 Sector Modeling Matrix", "📈 Capital Allocation Logic", "📒 Internal Ledger Vault"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 Sector Modeling Matrix", 
+    "📈 Capital Allocation Logic", 
+    "📒 Internal Ledger Vault",
+    "⏳ Burn Rate & Runway Analytics"
+])
 
 # --- TAB 1: SECTOR MODELING MATRIX ---
 with tab1:
@@ -124,141 +96,110 @@ with tab1:
     selected_industry = st.selectbox("Select Target Economic Sector (Qatar Framework):", list(INDUSTRIES.keys()))
     baseline = INDUSTRIES[selected_industry]
 
-    st.subheader(f"{selected_industry} Performance Benchmarks")
     col1, col2 = st.columns(2)
     col1.metric("Sector Net Margin Baseline", f"{baseline['margin']}%")
     col2.metric("Target Acquisition Cost (CAC)", f"{baseline['cac']:,.2f} PHP")
     st.warning(f"Market Risk Vector: {baseline['risk']}")
 
-    st.subheader("Venture Deviations")
     user_margin_mod = st.number_input("Net Margin Modifier Deviation (+/- %):", value=0.0, step=1.0)
     user_cac_mod = st.number_input("CAC Allocation Adjustment (+/- PHP):", value=0.0, step=100.0)
     special_conditions = st.text_area("Input Localized Variables:")
-
-    st.subheader("⚠️ Stress Testing Metrics")
     supply_chain_stress = st.slider("Global Supply Chain Delay Factor (%)", 0, 100, 0)
     local_rent_stress = st.slider("Regional Commercial Rent Escalation (%)", 0, 50, 0)
 
     if st.button("Run Quantitative Strategy Brief"):
         if not model or api_key == "FALLBACK_SECURE_VAULT":
-            st.error("⚠️ AI Strategic Engine Offline: System is experiencing high-volume quota traffic. Local modeling remains stable.")
+            st.error("⚠️ AI Engine Offline. Form-based modeling calculations above remain fully operational.")
         else:
             projected_margin = baseline["margin"] + user_margin_mod - (supply_chain_stress * 0.1)
             projected_cac = baseline["cac"] + user_cac_mod + (local_rent_stress * 30)
             
-            prompt = f"""
-            Execute financial audit for Qatar-based sector: {selected_industry}.
-            OPERATIONAL DATA MATRICES (DENOMINATED IN PHP):
-            - Benchmark Margin: {baseline['margin']}% | Modeled Margin: {projected_margin}%
-            - Benchmark CAC: {baseline['cac']} PHP | Modeled CAC: {projected_cac} PHP
-            - Stress Testing Parameters: Supply Chain Friction at {supply_chain_stress}%, Local Rent Hikes at {local_rent_stress}%
-            - Local Target Variables: {special_conditions}
-            
-            Generate a brutal, completely objective appraisal of financial viability under these parameters. Format strictly using headers: [VIABILITY EVALUATION], [CAPITAL EFFICIENCY ASSESSMENT], [RISK MITIGATION DIRECTIVES].
-            """
-            with st.spinner("Processing Operational Matrices..."):
+            prompt = f"Execute financial audit for Qatar-based sector: {selected_industry}. Data: Margin {projected_margin}%, CAC {projected_cac} PHP. Conditions: {special_conditions}."
+            with St.spinner("Processing Operational Matrices..."):
                 try:
                     response = model.generate_content(prompt, generation_config={"temperature": 0.1})
-                    st.subheader("📋 Executive Strategic Briefing")
                     st.write(response.text)
                 except Exception as e:
-                    st.error(f"Audit Interrupted by Quota Limits: {e}. Please attempt parameter recalculation shortly.")
+                    st.error(f"Quota Limit Hit: {e}")
 
 # --- TAB 2: CAPITAL ALLOCATION LOGIC ---
 with tab2:
     st.header("Executive Asset Allocation Engine")
-    st.write("Calculates structured investment deployment boundaries based on exact liquidity configurations.")
-    
     current_investment = st.number_input("Liquid Capital Invested/Available (PHP):", min_value=0.0, value=800000.0, step=50000.0)
     current_earnings = st.number_input("Gross Retained Capital Earnings (PHP):", min_value=0.0, value=240000.0, step=10000.0)
     future_goal = st.text_input("Operational Scaling Milestone Target:")
     
-    st.subheader("🛡️ Algorithmic Allocation Thresholds")
     if current_investment < 1500000:
-        bracket = "Micro-Venture Preservation Mode"
-        max_recommended_deployment = current_earnings * 0.25
-        strategy_summary = "High liquidity reservation mandatory. Avoid long-term capital lockdowns."
+        bracket, max_deployment = "Micro-Venture Preservation Mode", current_earnings * 0.25
     elif 1500000 <= current_investment <= 7500000:
-        bracket = "Mid-Tier Scaling Growth Mode"
-        max_recommended_deployment = current_earnings * 0.50
-        strategy_summary = "Balanced re-investment viable. Expansion to secondary industrial zones allowed."
+        bracket, max_deployment = "Mid-Tier Scaling Growth Mode", current_earnings * 0.50
     else:
-        bracket = "Macro Enterprise Dominance Mode"
-        max_recommended_deployment = current_earnings * 0.75
-        strategy_summary = "Aggressive capital deployment recommended. Capitalize on industrial scale efficiencies."
+        bracket, max_deployment = "Macro Enterprise Dominance Mode", current_earnings * 0.75
 
     kpi1, kpi2, kpi3 = st.columns(3)
     kpi1.metric("Asset Bracket Classification", bracket)
-    kpi2.metric("Max Calculated Capital Re-investment Cap", f"{max_recommended_deployment:,.2f} PHP")
-    kpi3.metric("Liquidity Safety Margin Profile", f"{(current_investment + current_earnings - max_recommended_deployment):,.2f} PHP")
-    st.info(f"System Baseline Directive: {strategy_summary}")
-
-    if st.button("Generate Asset Directive"):
-        if not model or api_key == "FALLBACK_SECURE_VAULT":
-            st.error("⚠️ CFO Strategy Matrix Temporarily Locked Due to API Quota limits. Directives based on rule equations are shown above.")
-        elif future_goal:
-            prompt = f"""
-            Analyze this corporate asset framework for a business operating in Qatar.
-            PORTFOLIO DATA CONFIGURATION (PHP VALUES):
-            - Asset Category: {bracket}
-            - Current Pool Liquidity: {current_investment} PHP
-            - Liquid Retained Earnings: {current_earnings} PHP
-            - Calculated Re-investment Boundary: {max_recommended_deployment} PHP
-            - Target Operational Objective: {future_goal}
-            
-            Deliver a direct, numbers-focused capital allocation decree. Specify precisely how much of the retained capital to lock down as protective operational runway versus how much to allocate directly toward achieving the '{future_goal}'. Do not use casual or descriptive language.
-            """
-            with st.spinner("Processing Portfolio Matrix..."):
-                try:
-                    response = model.generate_content(prompt, generation_config={"temperature": 0.1})
-                    st.subheader("📋 Capital Allocation Directive")
-                    st.write(response.text)
-                except Exception as e:
-                    st.error(f"Portfolio Engine Failure: {e}")
+    kpi2.metric("Max Recommended Deployment", f"{max_deployment:,.2f} PHP")
+    kpi3.metric("Liquidity Safety Margin Profile", f"{(current_investment + current_earnings - max_deployment):,.2f} PHP")
 
 # --- TAB 3: INTERNAL LEDGER VAULT ---
 with tab3:
     st.header("Financial Transaction System Ledger")
-    st.write("All entries register directly to the local text-based ledger database.")
-    
     with st.form("ledger_secure_form", clear_on_submit=True):
         col_t1, col_t2, col_t3 = st.columns(3)
-        with col_t1:
-            entry_title = st.text_input("Transaction Line Item Nomenclature")
-        with col_t2:
-            entry_type = st.selectbox("Accounting Allocation Class", ["Revenue", "Expense"])
-        with col_t3:
-            entry_amount = st.number_input("Transaction Financial Value (PHP)", min_value=0.0, value=0.0, step=500.0)
+        with col_t1: entry_title = st.text_input("Transaction Line Item Nomenclature")
+        with col_t2: entry_type = st.selectbox("Accounting Allocation Class", ["Revenue", "Expense"])
+        with col_t3: entry_amount = st.number_input("Transaction Financial Value (PHP)", min_value=0.0, value=0.0, step=500.0)
         
-        submitted = st.form_submit_button("Commit Transaction to CSV Storage")
-        if submitted and entry_title:
-            new_entry = {
-                "Title": entry_title,
-                "Type": entry_type,
-                "Amount": entry_amount if entry_type == "Revenue" else -entry_amount
-            }
-            
+        if st.form_submit_button("Commit Transaction to CSV Storage") and entry_title:
+            new_entry = {"Title": entry_title, "Type": entry_type, "Amount": entry_amount if entry_type == "Revenue" else -entry_amount}
             append_to_local_ledger(new_entry)
-            st.success("Transaction committed directly to local CSV disk sector.")
             st.rerun()
 
     if ledger_records:
         df_active = pd.DataFrame(ledger_records)
-        df_display = df_active.copy()
-        df_display['Amount'] = df_display['Amount'].map(lambda val: f"{val:,.2f} PHP")
-        st.dataframe(df_display, use_container_width=True)
-        
-        net_balance = df_active['Amount'].sum()
-        if net_balance >= 0:
-            st.success(f"📈 **Net Balance Profile: {net_balance:,.2f} PHP**")
-        else:
-            st.error(f"📉 **Net Deficit Position: {net_balance:,.2f} PHP**")
+        st.dataframe(df_active, use_container_width=True)
 
-        with st.expander("System Administration Protocols"):
-            if st.button("🔴 Purge Data Archive"):
-                empty_df = pd.DataFrame(columns=["Title", "Type", "Amount"])
-                empty_df.to_csv(CSV_FILE_PATH, index=False)
-                st.warning("Database file entirely cleared.")
-                st.rerun()
+# --- TAB 4: NEW RUNWAY & BURN RATE ANALYTICS (0% API USAGE) ---
+with tab4:
+    st.header("⏳ Local Runway & Burn Rate Analytics")
+    st.write("Calculates working capital survival metrics without querying cloud architectures.")
+    
+    # 1. Input parameters
+    col_r1, col_r2, col_r3 = st.columns(3)
+    with col_r1:
+        monthly_rent = st.number_input("Monthly Office/Infrastructure Rent (PHP):", value=15000.0, step=1000.0)
+    with col_r2:
+        monthly_payroll = st.number_input("Monthly Operations/Contractor Payroll (PHP):", value=45000.0, step=5000.0)
+    with col_r3:
+        monthly_marketing = st.number_input("Monthly Customer Acquisition Spend (PHP):", value=10000.0, step=1000.0)
+        
+    total_monthly_burn = monthly_rent + monthly_payroll + monthly_marketing
+    
+    # 2. Mathematical Calculations
+    st.subheader("Runway Allocation Summary")
+    rc1, rc2, rc3 = st.columns(3)
+    rc1.metric("Total Monthly Operating Burn", f"{total_monthly_burn:,.2f} PHP")
+    rc2.metric("Available Capital Reserves (From Ledger)", f"{net_balance_global:,.2f} PHP")
+    
+    if net_balance_global <= 0:
+        rc3.metric("Calculated Lifespan Runway", "0.0 Months", delta="CRITICAL DEFICIT", delta_color="inverse")
+        st.error("⚠️ System alert: Capital pool exhausted or in deficit position. Immediate cash injection required.")
+    elif total_monthly_burn == 0:
+        rc3.metric("Calculated Lifespan Runway", "Infinite", delta="Zero Burn", delta_color="normal")
     else:
-        st.info("System Ledger currently reads zero active transaction matrices.")
+        months_runway = net_balance_global / total_monthly_burn
+        delta_label = "Healthy Profile" if months_runway >= 6 else "High Capital Exhaustion Risk"
+        rc3.metric("Calculated Lifespan Runway", f"{months_runway:.1f} Months", delta=delta_label, delta_color="normal" if months_runway >= 6 else "inverse")
+        
+        # 3. Dynamic Forecasting Line Chart
+        st.subheader("Capital Depletion Timeline Simulation")
+        projection_months = max(int(np.ceil(months_runway * 1.5)), 6)
+        timeline = list(range(0, projection_months + 1))
+        
+        balances = []
+        for m in timeline:
+            current_projected = net_balance_global - (m * total_monthly_burn)
+            balances.append(max(current_projected, 0.0))
+            
+        chart_df = pd.DataFrame({"Month": timeline, "Projected Capital Pool (PHP)": balances})
+        st.line_chart(chart_df.set_index("Month"))
