@@ -4,14 +4,14 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
 # =====================================================================
-# 1. CORE SYSTEM LAYOUT & LOCALIZATION (PHP MATRIX / QATAR OPERATIONS)
+# 1. CORE SYSTEM LAYOUT & LOCALIZATION
 # =====================================================================
 st.set_page_config(page_title="Enterprise Analytics Core", layout="wide")
 st.title("📊 Quantitative Market Intelligence Platform")
 st.write("Macroeconomic simulation suite calibrated for Qatar operations. Currency values scaled in PHP.")
 
 # =====================================================================
-# 2. SYSTEM ENGINE INITIALIZATION (ERROR CORRECTION FIX)
+# 2. SYSTEM ENGINE INITIALIZATION (MODERN PRODUCTION UPDATE)
 # =====================================================================
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
@@ -21,15 +21,15 @@ else:
 genai.configure(api_key=api_key)
 
 try:
-    # Explicitly targeting the stable production version string to override v1beta 404 errors
+    # Switched to current production engine to eliminate v1beta 404 loop structures
     model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
+        model_name='gemini-2.0-flash',
         system_instruction=(
             "You are a closed-loop proprietary financial logic system analyzing corporate data. "
             "Your function is to evaluate commercial ventures operating within the State of Qatar. "
             "All financial inputs and outputs are strictly denominated in Philippine Peso (PHP). "
             "Adopt an absolute, cold, data-dense, analytical corporate tone. "
-            "CRITICAL: Do not use any conversational fillers, greetings, or sign-offs. Do not say 'Sure', 'Hello', or 'Here is the analysis'. "
+            "CRITICAL: Do not use any conversational fillers, greetings, or sign-offs. "
             "Output raw executive conclusions and numerical risk assessments immediately."
         )
     )
@@ -38,9 +38,8 @@ except Exception as e:
     model = None
 
 # =====================================================================
-# 3. EXPANDED SECTORIAL DATABASE (CALIBRATED FOR QATAR IN PHP)
+# 3. EXPANDED SECTORIAL DATABASE (QATAR CONFIGURATION IN PHP)
 # =====================================================================
-# Operational parameters match Doha/Qatar variables, financial indicators scaled to PHP equivalents
 INDUSTRIES = {
     "Food Industries": {
         "margin": 8.0, 
@@ -85,13 +84,25 @@ INDUSTRIES = {
 }
 
 # =====================================================================
-# 4. DATA PERSISTENCE LAYER (REAL-TIME CLOUD RECORDING)
+# 4. TRANSPARENT DATA PERSISTENCE LAYER (EXPOSING LOGICAL ERRORS)
 # =====================================================================
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     existing_data = conn.read(ttl="0d") 
-    ledger_records = existing_data.to_dict(orient="records")
-except Exception:
+    
+    # Validation check for missing headers on completely empty sheets
+    if existing_data.empty or len(existing_data.columns) < 3:
+        st.sidebar.error("⚠️ Structural Error: Target Google Sheet lacks mandatory columns. Add 'Title', 'Type', and 'Amount' to Row 1.")
+        is_cloud_connected = False
+        ledger_records = []
+    else:
+        ledger_records = existing_data.to_dict(orient="records")
+        is_cloud_connected = True
+        st.sidebar.success("⚡ Connected to Google Drive Storage.")
+except Exception as gsheets_err:
+    is_cloud_connected = False
+    st.sidebar.error(f"❌ Cloud Storage Offline: {gsheets_err}")
+    st.sidebar.info("Reverted to local session fallback data container.")
     if 'fallback_ledger' not in st.session_state:
         st.session_state.fallback_ledger = []
     ledger_records = st.session_state.fallback_ledger
@@ -116,7 +127,7 @@ with tab1:
     st.subheader("Venture Deviations")
     user_margin_mod = st.number_input("Net Margin Modifier Deviation (+/- %):", value=0.0, step=1.0)
     user_cac_mod = st.number_input("CAC Allocation Adjustment (+/- PHP):", value=0.0, step=100.0)
-    special_conditions = st.text_area("Input Localized Variables (e.g., 'Utilizing state-subsidized industrial zones, targeting corporate procurement paths'):")
+    special_conditions = st.text_area("Input Localized Variables:")
 
     st.subheader("⚠️ Stress Testing Metrics")
     supply_chain_stress = st.slider("Global Supply Chain Delay Factor (%)", 0, 100, 0)
@@ -154,9 +165,9 @@ with tab2:
     
     current_investment = st.number_input("Liquid Capital Invested/Available (PHP):", min_value=0.0, value=800000.0, step=50000.0)
     current_earnings = st.number_input("Gross Retained Capital Earnings (PHP):", min_value=0.0, value=240000.0, step=10000.0)
-    future_goal = st.text_input("Operational Scaling Milestone Target (e.g., Procurement of commercial lease space in Doha):")
+    future_goal = st.text_input("Operational Scaling Milestone Target:")
     
-    st.subheader("🛡️ Algorithmic Allocation Thresholds (Math Validation)")
+    st.subheader("🛡️ Algorithmic Allocation Thresholds")
     if current_investment < 1500000:
         bracket = "Micro-Venture Preservation Mode"
         max_recommended_deployment = current_earnings * 0.25
@@ -205,7 +216,7 @@ with tab3:
     with st.form("ledger_secure_form", clear_on_submit=True):
         col_t1, col_t2, col_t3 = st.columns(3)
         with col_t1:
-            entry_title = st.text_input("Transaction Line Item Nomenclature (e.g., Doha Logistics Center Rent)")
+            entry_title = st.text_input("Transaction Line Item Nomenclature")
         with col_t2:
             entry_type = st.selectbox("Accounting Allocation Class", ["Revenue", "Expense"])
         with col_t3:
@@ -219,20 +230,23 @@ with tab3:
                 "Amount": entry_amount if entry_type == "Revenue" else -entry_amount
             }
             
-            if 'fallback_ledger' in st.session_state:
+            if not is_cloud_connected:
                 st.session_state.fallback_ledger.append(new_entry)
-                ledger_records = st.session_state.fallback_ledger
-            else:
-                current_df = pd.DataFrame(ledger_records)
-                new_row_df = pd.DataFrame([new_entry])
-                updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
-                conn.update(data=updated_df)
-                st.success("Transaction committed to database.")
+                st.warning("Storage is operating locally. Data committed to volatile session memory.")
                 st.rerun()
+            else:
+                try:
+                    current_df = conn.read(ttl="0d")
+                    new_row_df = pd.DataFrame([new_entry])
+                    updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
+                    conn.update(data=updated_df)
+                    st.success("Transaction successfully transmitted to cloud file array.")
+                    st.rerun()
+                except Exception as write_err:
+                    st.error(f"Write Transaction Rejected by Target Storage Host: {write_err}")
 
     if ledger_records:
         df_active = pd.DataFrame(ledger_records)
-        
         df_display = df_active.copy()
         df_display['Amount'] = df_display['Amount'].map(lambda val: f"{val:,.2f} PHP")
         st.dataframe(df_display, use_container_width=True)
@@ -242,15 +256,3 @@ with tab3:
             st.success(f"📈 **Net Balance Profile: {net_balance:,.2f} PHP**")
         else:
             st.error(f"📉 **Net Deficit Position: {net_balance:,.2f} PHP**")
-            
-        with st.expander("System Administration Protocols"):
-            if st.button("🔴 Purge Data Archive"):
-                empty_df = pd.DataFrame(columns=["Title", "Type", "Amount"])
-                if 'fallback_ledger' in st.session_state:
-                    st.session_state.fallback_ledger = []
-                else:
-                    conn.update(data=empty_df)
-                st.warning("Database records entirely wiped.")
-                st.rerun()
-    else:
-        st.info("System Ledger currently reads zero active transaction matrices.")
